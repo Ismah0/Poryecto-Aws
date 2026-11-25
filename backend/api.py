@@ -145,8 +145,9 @@ def get_system_metrics():
     processing = sum(1 for j in all_jobs if j.get("status") in ("PROCESSING", "RETRYING_IN_SQS"))
     queued = sum(1 for j in all_jobs if j.get("status") == "QUEUED")
 
+    account_id = os.getenv("AWS_ACCOUNT_ID", "211409309904")
     return {
-        "mode": "AWS Cloud" if not config.SIMULATE_AWS else "Local Resilient Simulator",
+        "mode": f"AWS Cloud (Acc: {account_id})" if not config.SIMULATE_AWS else "Local Resilient Simulator",
         "app_env": config.APP_ENV,
         "region": config.AWS_REGION,
         "queue": queue_stats,

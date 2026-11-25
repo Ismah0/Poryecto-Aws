@@ -64,15 +64,37 @@ def deploy_cloudformation(session, stack_name, template_body, environment="dev")
         {"ParameterKey": "ProjectName", "ParameterValue": "docushield"}
     ]
 
+    create_kwargs = {
+        "StackName": stack_name,
+        "TemplateBody": template_body,
+        "Parameters": params,
+        "Capabilities": ["CAPABILITY_IAM", "CAPABILITY_NAMED_IAM"],
+        "OnFailure": "ROLLBACK"
+    }
+
+    # If in AWS Academy Learner Lab, attach LabRole
+    try:
+        sts = session.client("sts")
+        acc = sts.get_caller_identity().get("Account")
+        iam = session.client("iam")
+        iam.get_role(RoleName="LabRole")
+        create_kwargs["RoleARN"] = f"arn:aws:iam::{acc}:role/LabRole"
+        print(f"[+] AWS Academy LabRole detected and attached to CloudFormation ({create_kwargs['RoleARN']})")
+    except Exception:
+        pass
+
     try:
         if stack_exists:
             try:
-                cf_client.update_stack(
-                    StackName=stack_name,
-                    TemplateBody=template_body,
-                    Parameters=params,
-                    Capabilities=["CAPABILITY_IAM", "CAPABILITY_NAMED_IAM"]
-                )
+                update_kwargs = {
+                    "StackName": stack_name,
+                    "TemplateBody": template_body,
+                    "Parameters": params,
+                    "Capabilities": ["CAPABILITY_IAM", "CAPABILITY_NAMED_IAM"]
+                }
+                if "RoleARN" in create_kwargs:
+                    update_kwargs["RoleARN"] = create_kwargs["RoleARN"]
+                cf_client.update_stack(**update_kwargs)
                 waiter_name = "stack_update_complete"
             except cf_client.exceptions.ClientError as err:
                 if "No updates are to be performed" in str(err):
@@ -80,13 +102,7 @@ def deploy_cloudformation(session, stack_name, template_body, environment="dev")
                     return True, get_stack_outputs(cf_client, stack_name)
                 raise
         else:
-            cf_client.create_stack(
-                StackName=stack_name,
-                TemplateBody=template_body,
-                Parameters=params,
-                Capabilities=["CAPABILITY_IAM", "CAPABILITY_NAMED_IAM"],
-                OnFailure="ROLLBACK"
-            )
+            cf_client.create_stack(**create_kwargs)
             waiter_name = "stack_create_complete"
 
         print(f"[*] Waiting for CloudFormation operation to finish ({waiter_name})...")

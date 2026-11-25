@@ -283,7 +283,13 @@ class DynamoDBService:
                 local_cloud.database[job_data["job_id"]] = job_data
                 local_cloud._save_db()
         else:
-            self.table.put_item(Item=job_data)
+            try:
+                self.table.put_item(Item=job_data)
+            except Exception as e:
+                logger.warning(f"DynamoDB live put error (using resilient fallback store): {e}")
+                with local_cloud.lock:
+                    local_cloud.database[job_data["job_id"]] = job_data
+                    local_cloud._save_db()
 
     @resilient_retry(max_retries=3, base_delay=0.3)
     def update_job_status(self, job_id: str, status: str, error_msg: Optional[str] = None, result_data: Optional[Dict] = None):
@@ -300,30 +306,47 @@ class DynamoDBService:
                         item["result"] = result_data
                     local_cloud._save_db()
         else:
-            update_expr = "SET #s = :s, updated_at = :u"
-            expr_names = {"#s": "status"}
-            expr_vals = {":s": status, ":u": now}
-            if error_msg:
-                update_expr += ", error_message = :e"
-                expr_vals[":e"] = error_msg
-            if result_data:
-                update_expr += ", #r = :r"
-                expr_names["#r"] = "result"
-                expr_vals[":r"] = result_data
-            self.table.update_item(
-                Key={"job_id": job_id},
-                UpdateExpression=update_expr,
-                ExpressionAttributeNames=expr_names,
-                ExpressionAttributeValues=expr_vals
-            )
+            try:
+                update_expr = "SET #s = :s, updated_at = :u"
+                expr_names = {"#s": "status"}
+                expr_vals = {":s": status, ":u": now}
+                if error_msg:
+                    update_expr += ", error_message = :e"
+                    expr_vals[":e"] = error_msg
+                if result_data:
+                    update_expr += ", #r = :r"
+                    expr_names["#r"] = "result"
+                    expr_vals[":r"] = result_data
+                self.table.update_item(
+                    Key={"job_id": job_id},
+                    UpdateExpression=update_expr,
+                    ExpressionAttributeNames=expr_names,
+                    ExpressionAttributeValues=expr_vals
+                )
+            except Exception as e:
+                logger.warning(f"DynamoDB live update error (using resilient fallback store): {e}")
+                with local_cloud.lock:
+                    if job_id in local_cloud.database:
+                        item = local_cloud.database[job_id]
+                        item["status"] = status
+                        item["updated_at"] = now
+                        if error_msg:
+                            item["error_message"] = error_msg
+                        if result_data:
+                            item["result"] = result_data
+                        local_cloud._save_db()
 
     def get_job(self, job_id: str) -> Optional[Dict[str, Any]]:
         if self.simulate:
             with local_cloud.lock:
                 return local_cloud.database.get(job_id)
         else:
-            res = self.table.get_item(Key={"job_id": job_id})
-            return res.get("Item")
+            try:
+                res = self.table.get_item(Key={"job_id": job_id})
+                return res.get("Item")
+            except Exception:
+                with local_cloud.lock:
+                    return local_cloud.database.get(job_id)
 
     def list_jobs(self, limit: int = 50) -> List[Dict[str, Any]]:
         if self.simulate:
@@ -332,10 +355,16 @@ class DynamoDBService:
                 items.sort(key=lambda x: x.get("created_at", ""), reverse=True)
                 return items[:limit]
         else:
-            res = self.table.scan(Limit=limit)
-            items = res.get("Items", [])
-            items.sort(key=lambda x: x.get("created_at", ""), reverse=True)
-            return items
+            try:
+                res = self.table.scan(Limit=limit)
+                items = res.get("Items", [])
+                items.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+                return items
+            except Exception:
+                with local_cloud.lock:
+                    items = list(local_cloud.database.values())
+                    items.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+                    return items[:limit]
 
 
 # =============================================================================
