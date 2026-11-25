@@ -1,0 +1,41 @@
+name: DocuShield CI & Resilience Test Pipeline
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  validate-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Validate CloudFormation Template Syntax
+        run: |
+          python -c "
+          import yaml
+          with open('infra/cloudformation-template.yaml', 'r') as f:
+              yaml.safe_load(f)
+          print('CloudFormation syntax is valid YAML.')
+          "
+
+      - name: Execute Resilience & Chaos Engineering Test Suite
+        run: |
+          python tests/test_resilience_chaos.py
+
+      - name: Verify PDF Documentation Compilation
+        run: |
+          python docs/generate_pdf_docs.py

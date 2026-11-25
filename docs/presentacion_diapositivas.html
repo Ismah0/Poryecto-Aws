@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DocuShield - Presentación y Defensa del Proyecto AWS</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    .slide { display: none; }
+    .slide.active { display: flex; }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 font-sans antialiased h-screen overflow-hidden flex flex-col justify-between">
+
+  <!-- TOP BAR / TIMERS -->
+  <header class="border-b border-slate-800 bg-slate-900/80 px-6 py-3 flex items-center justify-between text-xs font-mono">
+    <div class="flex items-center space-x-3">
+      <span class="w-3 h-3 rounded-full bg-amber-500 animate-pulse"></span>
+      <span class="font-bold text-slate-200 uppercase tracking-wider">DocuShield • Defensa de Proyecto AWS</span>
+      <span class="text-slate-500">|</span>
+      <span id="slideIndicator" class="text-amber-400">Diapositiva 1 / 9</span>
+    </div>
+    
+    <div class="flex items-center space-x-6">
+      <div class="flex items-center space-x-2 bg-slate-800/80 px-3 py-1 rounded-lg border border-slate-700">
+        <i class="fa-regular fa-clock text-indigo-400"></i>
+        <span>Cronómetro: <span id="timerDisplay" class="text-emerald-400 font-bold">00:00</span></span>
+      </div>
+      <button onclick="toggleTimer()" id="timerBtn" class="text-slate-400 hover:text-white transition">
+        <i class="fa-solid fa-play"></i> Iniciar
+      </button>
+      <button onclick="resetTimer()" class="text-slate-500 hover:text-rose-400 transition" title="Reiniciar">
+        <i class="fa-solid fa-rotate-left"></i>
+      </button>
+    </div>
+  </header>
+
+  <!-- SLIDES CONTAINER -->
+  <main class="flex-1 max-w-6xl w-full mx-auto px-8 py-6 flex items-center justify-center">
+
+    <!-- SLIDE 1: PORTADA -->
+    <div class="slide active flex-col items-center text-center space-y-6 max-w-4xl">
+      <div class="w-20 h-20 rounded-2xl bg-gradient-to-tr from-amber-500 to-orange-600 flex items-center justify-center shadow-xl shadow-orange-500/20 mb-2">
+        <i class="fa-solid fa-shield-halved text-white text-4xl"></i>
+      </div>
+      <span class="px-3 py-1 rounded-full text-xs font-mono bg-amber-500/10 text-amber-400 border border-amber-500/30">
+        DEFENSA TÉCNICA OFICIAL • PROYECTO LIBRE AWS
+      </span>
+      <h1 class="text-4xl md:text-5xl font-black text-white tracking-tight leading-tight">
+        DocuShield AI & Resilience Hub
+      </h1>
+      <p class="text-base md:text-lg text-slate-300 max-w-2xl">
+        Plataforma Distribuida de Ingesta, Procesamiento Asíncrono y Defensa de Caos en Amazon Web Services
+      </p>
+
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3 w-full pt-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-3 text-left">
+          <span class="text-[10px] text-slate-500 uppercase font-mono">Regla 1 (IaC)</span>
+          <p class="text-xs font-semibold text-slate-200 mt-0.5">CloudFormation & Python (0 clics)</p>
+        </div>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-3 text-left">
+          <span class="text-[10px] text-slate-500 uppercase font-mono">Regla 2 (Resiliencia)</span>
+          <p class="text-xs font-semibold text-emerald-400 mt-0.5">Demuéstrame que no se rompe</p>
+        </div>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-3 text-left">
+          <span class="text-[10px] text-slate-500 uppercase font-mono">Regla 3 (Categoría)</span>
+          <p class="text-xs font-semibold text-slate-200 mt-0.5">Aplicación Web Distribuida</p>
+        </div>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-3 text-left">
+          <span class="text-[10px] text-slate-500 uppercase font-mono">Regla 4 (Alcance)</span>
+          <p class="text-xs font-semibold text-amber-400 mt-0.5">1 Mes de Ingeniería Cloud</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLIDE 2: EL PROBLEMA Y ALCANCE (1 MES DE TRABAJO) -->
+    <div class="slide flex-col space-y-6 w-full">
+      <div class="border-b border-slate-800 pb-3">
+        <span class="text-xs text-amber-400 font-mono uppercase tracking-wider">01. Alcance & Contexto</span>
+        <h2 class="text-2xl font-bold text-white">El Reto de la Ingesta Concurrente y la Resiliencia</h2>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div class="bg-slate-900/80 border border-rose-500/30 rounded-2xl p-5 space-y-3">
+          <h3 class="text-sm font-bold text-rose-400 flex items-center space-x-2">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            <span>La Arquitectura Tradicional (Frágil)</span>
+          </h3>
+          <ul class="text-xs text-slate-300 space-y-2 list-disc list-inside">
+            <li>El servidor web procesa archivos pesados en el mismo hilo HTTP (Bloqueo de CPU).</li>
+            <li>Si un worker o contenedor cae a mitad de la subida, el archivo se pierde para siempre.</li>
+            <li>Archivos corruptos ("Poison Pills") bloquean los procesos indefinidamente (Queue Starvation).</li>
+            <li>Bases de datos saturadas arrojan errores 500 al cliente por falta de reintentos con Jitter.</li>
+          </ul>
+        </div>
+
+        <div class="bg-slate-900/80 border border-emerald-500/30 rounded-2xl p-5 space-y-3">
+          <h3 class="text-sm font-bold text-emerald-400 flex items-center space-x-2">
+            <i class="fa-solid fa-shield-check"></i>
+            <span>La Solución DocuShield (Resiliente)</span>
+          </h3>
+          <ul class="text-xs text-slate-300 space-y-2 list-disc list-inside">
+            <li><b>Desacoplamiento Total</b>: Ingesta rápida con respuesta en &lt;50ms y cola en Amazon SQS.</li>
+            <li><b>Zero Data Loss</b>: Si el worker muere, SQS Visibility Timeout redespacha la tarea.</li>
+            <li><b>Dead Letter Queue (DLQ)</b>: Aislamiento automático de payloads venenosos tras 3 intentos.</li>
+            <li><b>Idempotencia Atómica</b>: DynamoDB garantiza que ningún reintento duplique registros.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLIDE 3: DIAGRAMA DE ARQUITECTURA -->
+    <div class="slide flex-col space-y-4 w-full">
+      <div class="border-b border-slate-800 pb-2">
+        <span class="text-xs text-amber-400 font-mono uppercase tracking-wider">02. Topología de Componentes</span>
+        <h2 class="text-2xl font-bold text-white">Diagrama de Arquitectura AWS & Flujo de Datos</h2>
+      </div>
+
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 font-mono text-xs text-slate-200">
+        <pre class="leading-relaxed text-indigo-300">
+  [ Cliente SPA ] ---> (1. POST) ---> [ FastAPI Web Server ]
+                                          |          |
+             +----------------------------+          |
+             v (2. Guardar Raw)                      v (3. Encolar Tarea)
+    +--------------------+                  +--------------------+
+    |  Amazon S3 Raw     |                  |  Amazon SQS        |
+    |  (SSE-256 Storage) |                  |  (Task Queue)      |
+    +--------------------+                  +--------------------+
+                                                       |
+                                                       v (4. Long Poll & Visibility 30s)
+                                            +--------------------+
+                                            |  Worker Fleet      |
+                                            |  (Consumer Engine) |
+                                            +--------------------+
+                                                 |          |
+            +------------------------------------+          |
+            v (5. Metadata Analizada)                       v (6. Estado Atómico)
+    +--------------------+                         +--------------------+
+    |  Amazon S3         |                         |  Amazon DynamoDB   |
+    |  (Processed Output)|                         |  (Jobs Registry)   |
+    +--------------------+                         +--------------------+
+                                                             | (Tras 3 fallos)
+                                                             v
+                                                   +--------------------+
+                                                   |  Amazon SQS (DLQ)  | ---> [ Amazon SNS / Alerta ]
+                                                   +--------------------+
+        </pre>
+      </div>
+      <p class="text-xs text-slate-400 italic">
+        Flujo de datos asíncrono con tolerancia a caídas en cada capa del sistema.
+      </p>
+    </div>
+
+    <!-- SLIDE 4: JUSTIFICACIÓN DE DECISIONES TÉCNICAS -->
+    <div class="slide flex-col space-y-5 w-full">
+      <div class="border-b border-slate-800 pb-2">
+        <span class="text-xs text-amber-400 font-mono uppercase tracking-wider">03. Justificación Técnica</span>
+        <h2 class="text-2xl font-bold text-white">¿Por qué estos servicios y no otros?</h2>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+        <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+          <div class="flex items-center justify-between font-bold text-amber-400 mb-1">
+            <span>Amazon S3 vs EBS / EFS</span>
+            <i class="fa-brands fa-aws"></i>
+          </div>
+          <p class="text-slate-300">
+            <b>Ventaja:</b> 11 nueves de durabilidad (99.999999999%), URLs prefirmadas seguras sin saturar el backend, y costo por GB mínimo.
+          </p>
+        </div>
+
+        <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+          <div class="flex items-center justify-between font-bold text-sky-400 mb-1">
+            <span>Amazon SQS vs Kafka / RabbitMQ</span>
+            <i class="fa-solid fa-layer-group"></i>
+          </div>
+          <p class="text-slate-300">
+            <b>Ventaja:</b> 100% Serverless. Costo $0 en reposo. Redrive Policy nativa a DLQ sin mantener clústeres EC2 24/7.
+          </p>
+        </div>
+
+        <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+          <div class="flex items-center justify-between font-bold text-purple-400 mb-1">
+            <span>Amazon DynamoDB vs RDS PostgreSQL</span>
+            <i class="fa-solid fa-database"></i>
+          </div>
+          <p class="text-slate-300">
+            <b>Ventaja:</b> Modo On-Demand. Sin caídas por límite de conexiones (Connection Pooling). Latencia de &lt;10ms y operaciones atómicas.
+          </p>
+        </div>
+
+        <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+          <div class="flex items-center justify-between font-bold text-emerald-400 mb-1">
+            <span>CloudFormation + Boto3 vs Consola Web</span>
+            <i class="fa-solid fa-code"></i>
+          </div>
+          <p class="text-slate-300">
+            <b>Ventaja:</b> Cumple la Regla 1 al 100% (cero clics en consola). Despliegue reproducible en 1 comando y rollback automático ante error.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLIDE 5: PRUEBAS DE RESILIENCIA (REGLA 2) -->
+    <div class="slide flex-col space-y-4 w-full">
+      <div class="border-b border-slate-800 pb-2">
+        <span class="text-xs text-rose-400 font-mono uppercase tracking-wider">04. Regla 2: Demuéstrame que no se rompe</span>
+        <h2 class="text-2xl font-bold text-white">Matriz de Pruebas de Resistencia y Caos</h2>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+          <thead class="bg-slate-800 text-slate-300 font-mono">
+            <tr>
+              <th class="p-3">Componente</th>
+              <th class="p-3">Fallo Simulado</th>
+              <th class="p-3">Impacto Potencial</th>
+              <th class="p-3">Mitigación Automática</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-800 text-slate-300">
+            <tr>
+              <td class="p-3 font-bold text-white">Worker Fleet</td>
+              <td class="p-3 text-rose-300">Muerte súbita en pleno job</td>
+              <td class="p-3">Pérdida de la tarea</td>
+              <td class="p-3 text-emerald-400"><b>SQS Visibility Timeout</b> lo redespacha a otro worker. Cero pérdida.</td>
+            </tr>
+            <tr>
+              <td class="p-3 font-bold text-white">Payload Ingest</td>
+              <td class="p-3 text-amber-300">Poison Pill (Bytes corruptos)</td>
+              <td class="p-3">Bloqueo de la cola entera</td>
+              <td class="p-3 text-emerald-400"><b>SQS Redrive Policy</b>: Aislamiento en <b>DLQ</b> tras 3 fallos + Alerta SNS.</td>
+            </tr>
+            <tr>
+              <td class="p-3 font-bold text-white">DynamoDB</td>
+              <td class="p-3 text-sky-300">Throttling 503 / Saturación</td>
+              <td class="p-3">Error 500 al cliente</td>
+              <td class="p-3 text-emerald-400"><b>Exponential Backoff + Full Jitter</b> absorbe el pico y reintenta.</td>
+            </tr>
+            <tr>
+              <td class="p-3 font-bold text-white">Dead Letter Queue</td>
+              <td class="p-3 text-indigo-300">Recuperación de cuarentena</td>
+              <td class="p-3">Datos estancados</td>
+              <td class="p-3 text-emerald-400"><b>DLQ Replay Utility</b> drena la DLQ de vuelta a la cola principal.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="text-xs text-emerald-400 font-mono">
+        ✓ 16/16 pruebas de resiliencia automatizadas superadas en tests/test_resilience_chaos.py
+      </p>
+    </div>
+
+    <!-- SLIDE 6: DEMOSTRACIÓN EN VIVO (5 MINUTOS) -->
+    <div class="slide flex-col space-y-4 w-full">
+      <div class="border-b border-slate-800 pb-2">
+        <span class="text-xs text-amber-400 font-mono uppercase tracking-wider">05. Demostración en Vivo</span>
+        <h2 class="text-2xl font-bold text-white">Guía de Demostración en Tiempo Real (5 Minutos)</h2>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+        <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl space-y-2">
+          <span class="font-mono text-amber-400 font-bold">Paso 1 (1:30 min)</span>
+          <h4 class="font-bold text-white">Ingesta Nominal</h4>
+          <p class="text-slate-400">
+            Subir archivo de prueba. Mostrar cómo S3 guarda el raw, SQS encola y DynamoDB pasa a <span class="text-emerald-400 font-mono">COMPLETED</span> en 400ms.
+          </p>
+        </div>
+
+        <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl space-y-2">
+          <span class="font-mono text-rose-400 font-bold">Paso 2 (2:00 min)</span>
+          <h4 class="font-bold text-white">Simular Crash de Worker</h4>
+          <p class="text-slate-400">
+            Pulsar "Forzar Muerte de Worker". El proceso muere a mitad de tarea. SQS Visibility Timeout expira y el mensaje es recuperado intacto.
+          </p>
+        </div>
+
+        <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl space-y-2">
+          <span class="font-mono text-sky-400 font-bold">Paso 3 (1:30 min)</span>
+          <h4 class="font-bold text-white">Inyectar Poison Pill & DLQ</h4>
+          <p class="text-slate-400">
+            Inyectar mensaje corrupto. Tras 3 reintentos, el nodo DLQ se ilumina en rojo, entra en cuarentena y SNS envía la alerta.
+          </p>
+        </div>
+      </div>
+
+      <div class="bg-slate-900/60 border border-slate-800 p-3 rounded-xl flex items-center justify-between text-xs">
+        <span class="text-slate-300">URL del Dashboard en Vivo: <code class="text-amber-400">http://localhost:8000</code></span>
+        <span class="text-emerald-400 font-mono font-semibold">Listo para proyectar</span>
+      </div>
+    </div>
+
+    <!-- SLIDE 7: ANÁLISIS DE COSTOS (1 AÑO FUERA DE FREE TIER) -->
+    <div class="slide flex-col space-y-4 w-full">
+      <div class="border-b border-slate-800 pb-2">
+        <span class="text-xs text-emerald-400 font-mono uppercase tracking-wider">06. Viabilidad Económica</span>
+        <h2 class="text-2xl font-bold text-white">Análisis de Costos Fuera de la Capa Gratuita a 1 Año</h2>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
+        <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+          <span class="text-xs text-slate-400 font-mono">10,000 docs/mes</span>
+          <div class="text-2xl font-bold text-white font-mono my-2">$8.23 <span class="text-xs font-normal text-slate-500">USD/mes</span></div>
+          <span class="text-[11px] text-slate-500">$98.76 USD al año</span>
+        </div>
+
+        <div class="bg-slate-900 border border-emerald-500/40 p-4 rounded-xl bg-emerald-950/20">
+          <span class="text-xs text-emerald-400 font-mono font-bold">100,000 docs/mes (Escenario Base)</span>
+          <div class="text-2xl font-bold text-emerald-400 font-mono my-2">$16.20 <span class="text-xs font-normal text-slate-400">USD/mes</span></div>
+          <span class="text-[11px] text-emerald-300 font-semibold">$194.40 USD al año</span>
+        </div>
+
+        <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+          <span class="text-xs text-slate-400 font-mono">1,000,000 docs/mes (Alta Carga)</span>
+          <div class="text-2xl font-bold text-white font-mono my-2">$71.60 <span class="text-xs font-normal text-slate-500">USD/mes</span></div>
+          <span class="text-[11px] text-slate-500">$859.20 USD al año</span>
+        </div>
+      </div>
+
+      <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl text-xs space-y-1 text-slate-300">
+        <p>• <b>Costo Unitario</b>: Apenas <b>$0.00016 USD</b> por documento procesado y almacenado de forma redundante.</p>
+        <p>• <b>Ahorro Arquitectónico</b>: Ahorro superior al <b>85%</b> respecto a servidores EC2 dedicados + RDS que cuestan más de $1,200 USD anuales.</p>
+      </div>
+    </div>
+
+    <!-- SLIDE 8: CUMPLIMIENTO DE REGLA 1 (IaC) -->
+    <div class="slide flex-col space-y-4 w-full">
+      <div class="border-b border-slate-800 pb-2">
+        <span class="text-xs text-sky-400 font-mono uppercase tracking-wider">07. Cumplimiento de Reglas</span>
+        <h2 class="text-2xl font-bold text-white">Infraestructura como Código: 0 Clics en Consola</h2>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+        <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl space-y-2">
+          <h4 class="font-bold text-white flex items-center space-x-2">
+            <i class="fa-solid fa-file-code text-amber-400"></i>
+            <span>Plantilla CloudFormation (IaC)</span>
+          </h4>
+          <p class="text-slate-400">
+            Define S3 Buckets con versionado y SSE-256, SQS Task Queue con Redrive Policy hacia DLQ, DynamoDB con modo On-Demand, tópicos SNS y alarmas CloudWatch en <code>infra/cloudformation-template.yaml</code>.
+          </p>
+        </div>
+
+        <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl space-y-2">
+          <h4 class="font-bold text-white flex items-center space-x-2">
+            <i class="fa-brands fa-python text-sky-400"></i>
+            <span>Script de Automatización Python</span>
+          </h4>
+          <p class="text-slate-400">
+            <code>python infra/deploy.py --deploy</code> valida la sintaxis, crea o actualiza el stack mediante Boto3, espera el evento completado y genera automáticamente el archivo <code>.env</code>.
+          </p>
+        </div>
+      </div>
+
+      <div class="bg-slate-900/60 border border-slate-800 p-3 rounded-xl font-mono text-xs text-slate-300">
+        <span class="text-slate-500"># Comando de despliegue en una sola línea:</span><br/>
+        <span class="text-emerald-400">python infra/deploy.py --deploy</span>
+      </div>
+    </div>
+
+    <!-- SLIDE 9: CONCLUSIONES Y PREGUNTAS -->
+    <div class="slide flex-col items-center text-center space-y-6 max-w-3xl">
+      <div class="w-16 h-16 rounded-full bg-emerald-500/10 text-emerald-400 flex items-center justify-center text-3xl mb-2">
+        <i class="fa-solid fa-check-double"></i>
+      </div>
+      <h2 class="text-3xl font-bold text-white">Conclusiones del Proyecto</h2>
+      <p class="text-sm text-slate-300 leading-relaxed">
+        DocuShield demuestra que una arquitectura orientada a eventos con <b>S3 + SQS + DynamoDB</b> entrega resiliencia de grado de misión crítica, eliminando puntos únicos de fallo y reduciendo costos en más del 85% frente a arquitecturas monolíticas tradicionales.
+      </p>
+
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 w-full text-xs text-slate-400 font-mono">
+        <p class="text-slate-200 font-bold mb-1">Entregables Listos:</p>
+        <p>• Repositorio Git con Código Fuente y Scripts IaC</p>
+        <p>• Documentación Oficial en PDF (<code>docs/DocuShield_AWS_Documentacion_Oficial.pdf</code>)</p>
+        <p>• Suite de 16 Pruebas Automatizadas de Caos</p>
+      </div>
+
+      <div class="pt-4">
+        <span class="text-xs font-mono text-amber-400 uppercase tracking-widest">¡Muchas gracias por su atención! Espacio para preguntas del profesor.</span>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- BOTTOM NAVIGATION CONTROLS -->
+  <footer class="border-t border-slate-800 bg-slate-900/80 px-6 py-3 flex items-center justify-between text-xs">
+    <div class="text-slate-500 font-mono">
+      Navegación: Use las teclas <kbd class="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-300">←</kbd> y <kbd class="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-300">→</kbd> o los botones.
+    </div>
+
+    <div class="flex items-center space-x-3">
+      <button onclick="prevSlide()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-4 py-1.5 rounded-lg border border-slate-700 transition flex items-center space-x-1">
+        <i class="fa-solid fa-chevron-left"></i>
+        <span>Anterior</span>
+      </button>
+      <button onclick="nextSlide()" class="bg-amber-600 hover:bg-amber-500 text-white font-medium px-4 py-1.5 rounded-lg transition flex items-center space-x-1 shadow-lg shadow-amber-600/20">
+        <span>Siguiente</span>
+        <i class="fa-solid fa-chevron-right"></i>
+      </button>
+    </div>
+  </footer>
+
+  <!-- SLIDE LOGIC & TIMER SCRIPT -->
+  <script>
+    let currentSlide = 0;
+    const slides = document.querySelectorAll('.slide');
+    const totalSlides = slides.length;
+
+    function showSlide(index) {
+      slides.forEach((s, i) => {
+        s.classList.toggle('active', i === index);
+      });
+      document.getElementById('slideIndicator').textContent = `Diapositiva ${index + 1} / ${totalSlides}`;
+    }
+
+    function nextSlide() {
+      if (currentSlide < totalSlides - 1) {
+        currentSlide++;
+        showSlide(currentSlide);
+      }
+    }
+
+    function prevSlide() {
+      if (currentSlide > 0) {
+        currentSlide--;
+        showSlide(currentSlide);
+      }
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight' || e.key === ' ') {
+        nextSlide();
+      } else if (e.key === 'ArrowLeft') {
+        prevSlide();
+      }
+    });
+
+    // Presentation Timer
+    let timerInterval = null;
+    let secondsElapsed = 0;
+
+    function toggleTimer() {
+      const btn = document.getElementById('timerBtn');
+      if (timerInterval) {
+        clearInterval(timerInterval);
+        timerInterval = null;
+        btn.innerHTML = '<i class="fa-solid fa-play"></i> Continuar';
+      } else {
+        timerInterval = setInterval(() => {
+          secondsElapsed++;
+          const mins = String(Math.floor(secondsElapsed / 60)).padStart(2, '0');
+          const secs = String(secondsElapsed % 60).padStart(2, '0');
+          document.getElementById('timerDisplay').textContent = `${mins}:${secs}`;
+          
+          // Color code timer: 5 mins demo warning
+          if (secondsElapsed >= 480) { // 8 mins
+            document.getElementById('timerDisplay').className = 'text-rose-400 font-bold animate-pulse';
+          } else if (secondsElapsed >= 300) { // 5 mins
+            document.getElementById('timerDisplay').className = 'text-amber-400 font-bold';
+          }
+        }, 1000);
+        btn.innerHTML = '<i class="fa-solid fa-pause"></i> Pausar';
+      }
+    }
+
+    function resetTimer() {
+      if (timerInterval) {
+        clearInterval(timerInterval);
+        timerInterval = null;
+      }
+      secondsElapsed = 0;
+      document.getElementById('timerDisplay').textContent = '00:00';
+      document.getElementById('timerDisplay').className = 'text-emerald-400 font-bold';
+      document.getElementById('timerBtn').innerHTML = '<i class="fa-solid fa-play"></i> Iniciar';
+    }
+  </script>
+</body>
+</html>

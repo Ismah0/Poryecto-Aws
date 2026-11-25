@@ -1,0 +1,202 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  DocuShield Cloud Infrastructure - Resilient Document Processing & Chaos Defense Stack.
+  Includes S3 Storage, SQS Decoupled Queues with DLQ Redrive Policy, DynamoDB Job Registry,
+  SNS Alerting Topic, and CloudWatch Resilience Alarms.
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, staging, prod]
+    Description: Environment stage for naming and resource allocation.
+  ProjectName:
+    Type: String
+    Default: docushield
+    Description: Base name prefix for all project resources.
+
+Resources:
+  # =========================================================================
+  # 1. STORAGE: Amazon S3 (Raw Documents & Processed Artifacts)
+  # =========================================================================
+  RawBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${ProjectName}-raw-${Environment}-${AWS::AccountId}"
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: CleanUpOldUploads
+            Status: Enabled
+            ExpirationInDays: 30
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+  ProcessedBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${ProjectName}-processed-${Environment}-${AWS::AccountId}"
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # =========================================================================
+  # 2. MESSAGING & RESILIENCE: SQS Queues & Dead Letter Queue (DLQ)
+  # =========================================================================
+  ProcessingDeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub "${ProjectName}-processing-dlq-${Environment}"
+      MessageRetentionPeriod: 1209600 # 14 days quarantine retention
+      KmsMasterKeyId: alias/aws/sqs
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Role
+          Value: DeadLetterQueue
+
+  ProcessingTaskQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub "${ProjectName}-task-queue-${Environment}"
+      VisibilityTimeout: 30 # Time given to worker before retrying
+      MessageRetentionPeriod: 345600 # 4 days
+      KmsMasterKeyId: alias/aws/sqs
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt ProcessingDeadLetterQueue.Arn
+        maxReceiveCount: 3 # Poison pill isolation after 3 attempts
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Role
+          Value: MainTaskQueue
+
+  # =========================================================================
+  # 3. DATABASE: Amazon DynamoDB (Idempotency & State Tracking)
+  # =========================================================================
+  JobsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${ProjectName}-jobs-${Environment}"
+      BillingMode: PAY_PER_REQUEST # Serverless Pay-as-you-go, 0 idle cost
+      AttributeDefinitions:
+        - AttributeName: job_id
+          AttributeType: S
+        - AttributeName: status
+          AttributeType: S
+        - AttributeName: created_at
+          AttributeType: S
+      KeySchema:
+        - AttributeName: job_id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: StatusIndex
+          KeySchema:
+            - AttributeName: status
+              KeyType: HASH
+            - AttributeName: created_at
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # =========================================================================
+  # 4. MONITORING & ALERTING: Amazon SNS & CloudWatch Alarms
+  # =========================================================================
+  AlertsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub "${ProjectName}-resilience-alerts-${Environment}"
+      DisplayName: "DocuShield Resilience Incident Alerts"
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+
+  DLQIncidentAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${ProjectName}-DLQ-Messages-Alarm-${Environment}"
+      AlarmDescription: "Triggers when poison pill messages enter the Dead Letter Queue"
+      Namespace: "AWS/SQS"
+      MetricName: "ApproximateNumberOfMessagesVisible"
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt ProcessingDeadLetterQueue.QueueName
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmActions:
+        - !Ref AlertsTopic
+
+Outputs:
+  RawBucketName:
+    Description: S3 Bucket for Raw Documents
+    Value: !Ref RawBucket
+    Export:
+      Name: !Sub "${AWS::StackName}-RawBucket"
+
+  ProcessedBucketName:
+    Description: S3 Bucket for Processed Outputs
+    Value: !Ref ProcessedBucket
+    Export:
+      Name: !Sub "${AWS::StackName}-ProcessedBucket"
+
+  TaskQueueUrl:
+    Description: URL of the Main Processing SQS Queue
+    Value: !Ref ProcessingTaskQueue
+    Export:
+      Name: !Sub "${AWS::StackName}-TaskQueueUrl"
+
+  TaskQueueArn:
+    Description: ARN of the Main Processing SQS Queue
+    Value: !GetAtt ProcessingTaskQueue.Arn
+
+  DeadLetterQueueUrl:
+    Description: URL of the Dead Letter Queue (DLQ)
+    Value: !Ref ProcessingDeadLetterQueue
+    Export:
+      Name: !Sub "${AWS::StackName}-DLQUrl"
+
+  DeadLetterQueueArn:
+    Description: ARN of the Dead Letter Queue (DLQ)
+    Value: !GetAtt ProcessingDeadLetterQueue.Arn
+
+  JobsTableName:
+    Description: DynamoDB Table Name for Job State
+    Value: !Ref JobsTable
+    Export:
+      Name: !Sub "${AWS::StackName}-JobsTable"
+
+  AlertsTopicArn:
+    Description: SNS Topic ARN for Alerts
+    Value: !Ref AlertsTopic
+    Export:
+      Name: !Sub "${AWS::StackName}-AlertsTopic"

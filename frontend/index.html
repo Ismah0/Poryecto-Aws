@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DocuShield AI - AWS Resilience & Chaos Engineering Platform</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    @keyframes pulse-slow {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    .animate-pulse-slow {
+      animation: pulse-slow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen font-sans antialiased flex flex-col">
+
+  <!-- TOP NAVIGATION HEADER -->
+  <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-500 to-orange-600 flex items-center justify-center shadow-lg shadow-orange-500/20">
+          <i class="fa-solid fa-shield-halved text-white text-xl"></i>
+        </div>
+        <div>
+          <div class="flex items-center space-x-2">
+            <span class="font-bold text-lg text-white tracking-tight">DocuShield</span>
+            <span class="text-xs px-2 py-0.5 rounded-full font-mono font-medium bg-amber-500/10 text-amber-400 border border-amber-500/30">AWS Resilience Hub</span>
+          </div>
+          <p class="text-xs text-slate-400">Procesamiento Distribuido Tolerante a Fallos & Chaos Defense</p>
+        </div>
+      </div>
+
+      <div class="flex items-center space-x-4">
+        <div id="connectionBadge" class="flex items-center space-x-2 text-xs bg-slate-800/80 px-3 py-1.5 rounded-lg border border-slate-700">
+          <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+          <span id="envModeLabel" class="text-slate-300 font-mono">Conectando...</span>
+        </div>
+        <button onclick="resetSystem()" class="text-xs text-slate-400 hover:text-rose-400 transition flex items-center space-x-1 p-1.5 rounded hover:bg-slate-800" title="Reiniciar datos">
+          <i class="fa-solid fa-arrow-rotate-left"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN DASHBOARD CONTENT -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+    <!-- ARCHITECTURE FLOW VISUALIZER -->
+    <div class="bg-slate-900/70 border border-slate-800 rounded-2xl p-5 shadow-xl">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider flex items-center space-x-2">
+          <i class="fa-solid fa-network-wired text-indigo-400"></i>
+          <span>Topología de Arquitectura Activa AWS</span>
+        </h2>
+        <span class="text-xs text-slate-500">Actualización en tiempo real (Polling reactivo 2s)</span>
+      </div>
+
+      <div class="grid grid-cols-2 md:grid-cols-6 gap-3 text-center">
+        <!-- 1. Client / Presigned S3 -->
+        <div class="bg-slate-800/50 border border-slate-700/60 rounded-xl p-3 flex flex-col items-center">
+          <i class="fa-solid fa-cloud-arrow-up text-indigo-400 text-2xl mb-1"></i>
+          <span class="text-xs font-semibold text-slate-200">Cliente / API</span>
+          <span class="text-[10px] text-slate-400 mt-1">Presigned Ingest</span>
+        </div>
+
+        <!-- 2. Amazon S3 Raw -->
+        <div class="bg-slate-800/50 border border-slate-700/60 rounded-xl p-3 flex flex-col items-center">
+          <i class="fa-brands fa-aws text-amber-500 text-2xl mb-1"></i>
+          <span class="text-xs font-semibold text-slate-200">Amazon S3</span>
+          <span class="text-[10px] text-slate-400 mt-1">Raw Bucket (SSE-256)</span>
+        </div>
+
+        <!-- 3. Amazon SQS Task Queue -->
+        <div class="bg-slate-800/50 border border-slate-700/60 rounded-xl p-3 flex flex-col items-center relative">
+          <i class="fa-solid fa-layer-group text-sky-400 text-2xl mb-1"></i>
+          <span class="text-xs font-semibold text-slate-200">Amazon SQS</span>
+          <span class="text-[10px] text-slate-400 mt-1">Cola Principal (Tasks)</span>
+          <span id="sqsTasksBadge" class="absolute -top-2 -right-2 bg-sky-500 text-white font-mono text-[10px] px-2 py-0.5 rounded-full font-bold">0</span>
+        </div>
+
+        <!-- 4. Distributed Worker Fleet -->
+        <div class="bg-slate-800/50 border border-slate-700/60 rounded-xl p-3 flex flex-col items-center">
+          <i class="fa-solid fa-gears text-emerald-400 text-2xl mb-1"></i>
+          <span class="text-xs font-semibold text-slate-200">Worker Fleet</span>
+          <span class="text-[10px] text-emerald-400 mt-1" id="workerStatus">Activo / Polling</span>
+        </div>
+
+        <!-- 5. Amazon DynamoDB -->
+        <div class="bg-slate-800/50 border border-slate-700/60 rounded-xl p-3 flex flex-col items-center">
+          <i class="fa-solid fa-database text-purple-400 text-2xl mb-1"></i>
+          <span class="text-xs font-semibold text-slate-200">Amazon DynamoDB</span>
+          <span class="text-[10px] text-slate-400 mt-1">Idempotency & States</span>
+        </div>
+
+        <!-- 6. Dead Letter Queue & SNS -->
+        <div id="dlqNodeCard" class="bg-slate-800/50 border border-slate-700/60 rounded-xl p-3 flex flex-col items-center relative transition">
+          <i class="fa-solid fa-skull-crossbones text-rose-400 text-2xl mb-1"></i>
+          <span class="text-xs font-semibold text-slate-200">SQS DLQ & SNS</span>
+          <span class="text-[10px] text-slate-400 mt-1">Poison Pill Quarantine</span>
+          <span id="dlqCountBadge" class="absolute -top-2 -right-2 bg-slate-700 text-slate-300 font-mono text-[10px] px-2 py-0.5 rounded-full font-bold">0</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- METRICS CARDS -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div class="bg-slate-900/70 border border-slate-800 rounded-xl p-4 flex items-center space-x-3">
+        <div class="w-12 h-12 rounded-lg bg-indigo-500/10 text-indigo-400 flex items-center justify-center text-xl">
+          <i class="fa-solid fa-list-check"></i>
+        </div>
+        <div>
+          <span class="text-xs text-slate-400 font-medium">Trabajos Totales</span>
+          <div class="text-2xl font-bold text-white font-mono" id="statTotalJobs">0</div>
+        </div>
+      </div>
+
+      <div class="bg-slate-900/70 border border-slate-800 rounded-xl p-4 flex items-center space-x-3">
+        <div class="w-12 h-12 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center text-xl">
+          <i class="fa-solid fa-circle-check"></i>
+        </div>
+        <div>
+          <span class="text-xs text-slate-400 font-medium">Completados Exitosos</span>
+          <div class="text-2xl font-bold text-emerald-400 font-mono" id="statCompleted">0</div>
+        </div>
+      </div>
+
+      <div class="bg-slate-900/70 border border-slate-800 rounded-xl p-4 flex items-center space-x-3">
+        <div class="w-12 h-12 rounded-lg bg-sky-500/10 text-sky-400 flex items-center justify-center text-xl">
+          <i class="fa-solid fa-spinner animate-spin"></i>
+        </div>
+        <div>
+          <span class="text-xs text-slate-400 font-medium">En Vuelo / SQS</span>
+          <div class="text-2xl font-bold text-sky-400 font-mono" id="statInFlight">0</div>
+        </div>
+      </div>
+
+      <div class="bg-slate-900/70 border border-slate-800 rounded-xl p-4 flex items-center space-x-3">
+        <div class="w-12 h-12 rounded-lg bg-rose-500/10 text-rose-400 flex items-center justify-center text-xl">
+          <i class="fa-solid fa-triangle-exclamation"></i>
+        </div>
+        <div>
+          <span class="text-xs text-slate-400 font-medium">En Cuarentena (DLQ)</span>
+          <div class="text-2xl font-bold text-rose-400 font-mono" id="statDLQ">0</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MAIN INTERACTION SECTION: UPLOAD & CHAOS ENGINEERING -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+      <!-- LEFT: FILE UPLOAD ZONE -->
+      <div class="bg-slate-900/70 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col justify-between">
+        <div>
+          <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider mb-2 flex items-center space-x-2">
+            <i class="fa-solid fa-cloud-arrow-up text-amber-400"></i>
+            <span>Ingesta de Documentos</span>
+          </h2>
+          <p class="text-xs text-slate-400 mb-4">
+            Suba archivos para procesar su hash SHA-256, conteo de palabras y extracción de metadatos mediante S3 y SQS.
+          </p>
+
+          <div id="dropZone" class="border-2 border-dashed border-slate-700 hover:border-amber-500/50 rounded-xl p-6 text-center cursor-pointer transition bg-slate-800/20 hover:bg-slate-800/40">
+            <input type="file" id="fileInput" class="hidden" />
+            <i class="fa-regular fa-file-lines text-3xl text-slate-500 mb-2"></i>
+            <p class="text-xs text-slate-300 font-medium">Arrastre un documento aquí o haga clic para seleccionar</p>
+            <p class="text-[11px] text-slate-500 mt-1">Soporta .txt, .pdf, .json, .csv, .md</p>
+          </div>
+        </div>
+
+        <div class="mt-4 pt-4 border-t border-slate-800 flex items-center space-x-2">
+          <button onclick="uploadSampleDocument()" class="flex-1 bg-amber-600 hover:bg-amber-500 text-white font-medium text-xs py-2.5 px-4 rounded-xl transition flex items-center justify-center space-x-2 shadow-lg shadow-amber-600/20">
+            <i class="fa-solid fa-file-circle-plus"></i>
+            <span>Cargar Documento de Prueba</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- RIGHT: CHAOS & RESILIENCE TESTING LAB (Rule 2) -->
+      <div class="lg:col-span-2 bg-slate-900/70 border border-slate-800 rounded-2xl p-5 shadow-xl">
+        <div class="flex items-center justify-between mb-2">
+          <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider flex items-center space-x-2">
+            <i class="fa-solid fa-biohazard text-rose-400"></i>
+            <span>Laboratorio de Pruebas de Resiliencia & Caos</span>
+          </h2>
+          <span class="text-xs font-mono px-2 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/30">Regla 2: Demuéstrame que no se rompe</span>
+        </div>
+        <p class="text-xs text-slate-400 mb-4">
+          Inyecte fallos en tiempo real para verificar la tolerancia a fallos, reintentos con Jitter, y aislamiento en Dead Letter Queue (DLQ).
+        </p>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+          <!-- Button 1: Worker Crash -->
+          <div class="bg-slate-800/40 border border-slate-700/60 rounded-xl p-3 flex flex-col justify-between">
+            <div>
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-bold text-slate-200">1. Simular Muerte del Worker</span>
+                <i class="fa-solid fa-power-off text-rose-400 text-sm"></i>
+              </div>
+              <p class="text-[11px] text-slate-400 mt-1">
+                Mata el worker en pleno procesamiento. Comprueba que el mensaje <b>no se pierde</b> y SQS Visibility Timeout lo recupera automáticamente.
+              </p>
+            </div>
+            <button onclick="triggerChaos('/api/chaos/crash-worker', 'Muerte de Worker Armada')" class="mt-3 w-full bg-slate-800 hover:bg-rose-950/60 hover:border-rose-500 text-slate-200 hover:text-rose-300 border border-slate-700 text-xs font-medium py-1.5 px-3 rounded-lg transition flex items-center justify-center space-x-2">
+              <i class="fa-solid fa-bomb text-rose-400"></i>
+              <span>Forzar Muerte en Próximo Job</span>
+            </button>
+          </div>
+
+          <!-- Button 2: Poison Pill -->
+          <div class="bg-slate-800/40 border border-slate-700/60 rounded-xl p-3 flex flex-col justify-between">
+            <div>
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-bold text-slate-200">2. Inyectar Poison Pill</span>
+                <i class="fa-solid fa-virus text-amber-400 text-sm"></i>
+              </div>
+              <p class="text-[11px] text-slate-400 mt-1">
+                Inyecta payload no procesable. Falla 3 veces y SQS Redrive Policy lo <b>aísla en la DLQ</b> sin bloquear los demás trabajos.
+              </p>
+            </div>
+            <button onclick="triggerChaos('/api/chaos/inject-poison-pill', 'Poison Pill Inyectada')" class="mt-3 w-full bg-slate-800 hover:bg-amber-950/60 hover:border-amber-500 text-slate-200 hover:text-amber-300 border border-slate-700 text-xs font-medium py-1.5 px-3 rounded-lg transition flex items-center justify-center space-x-2">
+              <i class="fa-solid fa-radiation text-amber-400"></i>
+              <span>Inyectar Mensaje Venenoso</span>
+            </button>
+          </div>
+
+          <!-- Button 3: DynamoDB Throttling -->
+          <div class="bg-slate-800/40 border border-slate-700/60 rounded-xl p-3 flex flex-col justify-between">
+            <div>
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-bold text-slate-200">3. Simular Throttling en BD</span>
+                <i class="fa-solid fa-gauge-high text-sky-400 text-sm"></i>
+              </div>
+              <p class="text-[11px] text-slate-400 mt-1">
+                Provoca error 503 en DynamoDB. Demuestra la mitigación automática con <b>Exponential Backoff + Full Jitter</b>.
+              </p>
+            </div>
+            <button onclick="triggerChaos('/api/chaos/throttle-db', 'Throttling DynamoDB Simulado')" class="mt-3 w-full bg-slate-800 hover:bg-sky-950/60 hover:border-sky-500 text-slate-200 hover:text-sky-300 border border-slate-700 text-xs font-medium py-1.5 px-3 rounded-lg transition flex items-center justify-center space-x-2">
+              <i class="fa-solid fa-bolt text-sky-400"></i>
+              <span>Saturar DynamoDB</span>
+            </button>
+          </div>
+
+          <!-- Button 4: DLQ Replay -->
+          <div class="bg-slate-800/40 border border-slate-700/60 rounded-xl p-3 flex flex-col justify-between">
+            <div>
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-bold text-slate-200">4. Reintentar Cuarentena (DLQ)</span>
+                <i class="fa-solid fa-truck-ramp-box text-emerald-400 text-sm"></i>
+              </div>
+              <p class="text-[11px] text-slate-400 mt-1">
+                Drena los mensajes de la Dead Letter Queue y los reinyecta a la cola principal tras aplicar un parche correctivo.
+              </p>
+            </div>
+            <button onclick="triggerChaos('/api/dlq/replay', 'Replay DLQ Ejecutado')" class="mt-3 w-full bg-slate-800 hover:bg-emerald-950/60 hover:border-emerald-500 text-slate-200 hover:text-emerald-300 border border-slate-700 text-xs font-medium py-1.5 px-3 rounded-lg transition flex items-center justify-center space-x-2">
+              <i class="fa-solid fa-recycle text-emerald-400"></i>
+              <span>Drenar y Reprocesar DLQ</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Incident Feed Console -->
+        <div class="bg-slate-950 border border-slate-800 rounded-xl p-3 font-mono text-[11px]">
+          <div class="flex items-center justify-between pb-2 border-b border-slate-800 mb-2">
+            <span class="text-slate-400 flex items-center space-x-1.5">
+              <i class="fa-solid fa-terminal text-slate-500"></i>
+              <span>Registro de Eventos de Resiliencia en Vivo</span>
+            </span>
+            <span class="text-[10px] text-slate-500" id="incidentCount">0 incidentes</span>
+          </div>
+          <div id="incidentLogList" class="space-y-1.5 max-h-24 overflow-y-auto text-slate-300">
+            <div class="text-slate-500 italic">Esperando eventos del sistema o inyección de pruebas...</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- JOBS MONITORING TABLE (Amazon DynamoDB State) -->
+    <div class="bg-slate-900/70 border border-slate-800 rounded-2xl p-5 shadow-xl">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider flex items-center space-x-2">
+            <i class="fa-solid fa-table-list text-purple-400"></i>
+            <span>Registro de Trabajos (Amazon DynamoDB Jobs Table)</span>
+          </h2>
+          <p class="text-xs text-slate-400">Monitoreo de estado atómico con claves de partición e idempotencia.</p>
+        </div>
+        <button onclick="refreshData()" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded-lg border border-slate-700 transition flex items-center space-x-1">
+          <i class="fa-solid fa-rotate"></i>
+          <span>Refrescar</span>
+        </button>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-800/60 text-slate-400 font-mono border-b border-slate-700">
+            <tr>
+              <th class="py-2.5 px-3">Job ID</th>
+              <th class="py-2.5 px-3">Documento</th>
+              <th class="py-2.5 px-3">Estado DynamoDB</th>
+              <th class="py-2.5 px-3">Integridad SHA-256</th>
+              <th class="py-2.5 px-3">Latencia / Info</th>
+              <th class="py-2.5 px-3">Creado</th>
+              <th class="py-2.5 px-3 text-right">Detalle</th>
+            </tr>
+          </thead>
+          <tbody id="jobsTableBody" class="divide-y divide-slate-800/60 text-slate-300 font-mono">
+            <tr>
+              <td colspan="7" class="py-6 text-center text-slate-500 italic">No hay trabajos registrados. Suba un archivo para comenzar.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- DETAIL MODAL -->
+  <div id="detailModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden z-50 flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-xl w-full p-6 shadow-2xl relative">
+      <button onclick="closeModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white">
+        <i class="fa-solid fa-xmark text-lg"></i>
+      </button>
+      <h3 class="text-base font-bold text-white mb-1 flex items-center space-x-2">
+        <i class="fa-solid fa-file-invoice text-amber-400"></i>
+        <span>Detalle de Trabajo & Extracción de Metadatos</span>
+      </h3>
+      <p class="text-xs text-slate-400 mb-4" id="modalJobId"></p>
+      
+      <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 overflow-y-auto max-h-96 text-xs font-mono text-emerald-400">
+        <pre id="modalJsonContent"></pre>
+      </div>
+    </div>
+  </div>
+
+  <!-- JAVASCRIPT LOGIC -->
+  <script>
+    let cachedJobs = [];
+
+    async function fetchMetrics() {
+      try {
+        const res = await fetch('/api/metrics');
+        const data = await res.json();
+
+        document.getElementById('envModeLabel').textContent = `${data.mode} (${data.region})`;
+        document.getElementById('sqsTasksBadge').textContent = data.queue.tasks_visible;
+        document.getElementById('dlqCountBadge').textContent = data.queue.dlq_messages;
+        
+        // Highlight DLQ card if messages are in quarantine
+        const dlqCard = document.getElementById('dlqNodeCard');
+        if (data.queue.dlq_messages > 0) {
+          dlqCard.classList.add('border-rose-500', 'bg-rose-950/30');
+          document.getElementById('dlqCountBadge').className = 'absolute -top-2 -right-2 bg-rose-600 text-white font-mono text-[10px] px-2 py-0.5 rounded-full font-bold animate-bounce';
+        } else {
+          dlqCard.classList.remove('border-rose-500', 'bg-rose-950/30');
+          document.getElementById('dlqCountBadge').className = 'absolute -top-2 -right-2 bg-slate-700 text-slate-300 font-mono text-[10px] px-2 py-0.5 rounded-full font-bold';
+        }
+
+        document.getElementById('statTotalJobs').textContent = data.jobs.total;
+        document.getElementById('statCompleted').textContent = data.jobs.completed;
+        document.getElementById('statInFlight').textContent = data.queue.tasks_in_flight + data.queue.tasks_visible;
+        document.getElementById('statDLQ').textContent = data.queue.dlq_messages;
+
+        // Render incident feed
+        const incidentList = document.getElementById('incidentLogList');
+        const incidents = data.chaos_status.recent_incidents || [];
+        document.getElementById('incidentCount').textContent = `${incidents.length} incidentes registrados`;
+        
+        if (incidents.length > 0) {
+          incidentList.innerHTML = incidents.slice().reverse().map(inc => `
+            <div class="flex items-start space-x-2 text-[11px]">
+              <span class="text-slate-500 text-[10px] whitespace-nowrap">${inc.time_str.split(' ')[1]}</span>
+              <span class="px-1 py-0.2 rounded bg-slate-800 text-amber-400 text-[10px] font-bold">[${inc.experiment}]</span>
+              <span class="text-slate-300">${inc.details}</span>
+            </div>
+          `).join('');
+        }
+      } catch (err) {
+        console.error("Error fetching metrics:", err);
+      }
+    }
+
+    async function fetchJobs() {
+      try {
+        const res = await fetch('/api/jobs');
+        cachedJobs = await res.json();
+        renderJobsTable(cachedJobs);
+      } catch (err) {
+        console.error("Error fetching jobs:", err);
+      }
+    }
+
+    function renderJobsTable(jobs) {
+      const tbody = document.getElementById('jobsTableBody');
+      if (!jobs || jobs.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" class="py-6 text-center text-slate-500 italic">No hay trabajos registrados. Suba un archivo para comenzar.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = jobs.map(j => {
+        let statusBadge = '';
+        if (j.status === 'COMPLETED') {
+          statusBadge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">COMPLETED</span>';
+        } else if (j.status === 'PROCESSING') {
+          statusBadge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-sky-500/10 text-sky-400 border border-sky-500/30 animate-pulse">PROCESSING</span>';
+        } else if (j.status === 'DLQ_QUARANTINE') {
+          statusBadge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-rose-500/20 text-rose-400 border border-rose-500/50 font-bold">DLQ QUARANTINE</span>';
+        } else if (j.status === 'RETRYING_IN_SQS') {
+          statusBadge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/30 animate-pulse">RETRYING SQS</span>';
+        } else {
+          statusBadge = `<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-700 text-slate-300">${j.status}</span>`;
+        }
+
+        const latency = j.result?.metrics?.processing_time_ms ? `${j.result.metrics.processing_time_ms} ms` : (j.error_message ? `<span class="text-rose-400 truncate max-w-xs block" title="${j.error_message}">${j.error_message}</span>` : 'En cola');
+        const shortHash = j.sha256 ? `${j.sha256.substring(0, 10)}...` : 'N/A';
+
+        return `
+          <tr class="hover:bg-slate-800/40 transition">
+            <td class="py-2.5 px-3 font-semibold text-white">${j.job_id}</td>
+            <td class="py-2.5 px-3 text-slate-300 font-sans">${j.filename}</td>
+            <td class="py-2.5 px-3">${statusBadge}</td>
+            <td class="py-2.5 px-3 text-slate-400" title="${j.sha256}">${shortHash}</td>
+            <td class="py-2.5 px-3 text-slate-400">${latency}</td>
+            <td class="py-2.5 px-3 text-slate-500 text-[11px]">${j.created_at}</td>
+            <td class="py-2.5 px-3 text-right">
+              <button onclick="viewJobDetail('${j.job_id}')" class="text-indigo-400 hover:text-indigo-300 hover:underline text-xs">
+                Ver
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    async function uploadFile(file) {
+      const formData = new FormData();
+      formData.append('file', file);
+      try {
+        const res = await fetch('/api/upload', { method: 'POST', body: formData });
+        const data = await res.json();
+        refreshData();
+      } catch (err) {
+        alert("Error al subir archivo: " + err);
+      }
+    }
+
+    async function uploadSampleDocument() {
+      const sampleText = `REPORTE DE AUDITORÍA Y RESILIENCIA EMPRESARIAL DOCUSHIELD
+Fecha: ${new Date().toISOString()}
+Entorno: Amazon Web Services Cloud
+Módulos: S3 Ingestion, SQS Decoupled Queues, DynamoDB State Store, SNS Alerts.
+Este documento valida el procesamiento asíncrono y la idempotencia en sistemas distribuidos.`;
+
+      const blob = new Blob([sampleText], { type: 'text/plain' });
+      const file = new File([blob], `documento_auditoria_${Math.floor(Math.random()*1000)}.txt`, { type: 'text/plain' });
+      await uploadFile(file);
+    }
+
+    async function triggerChaos(endpoint, alertTitle) {
+      try {
+        const res = await fetch(endpoint, { method: 'POST' });
+        const data = await res.json();
+        fetchMetrics();
+        fetchJobs();
+      } catch (err) {
+        alert("Error al ejecutar experimento de caos: " + err);
+      }
+    }
+
+    async function resetSystem() {
+      if (confirm("¿Desea reiniciar las métricas y la base de datos de pruebas?")) {
+        await fetch('/api/reset', { method: 'POST' });
+        refreshData();
+      }
+    }
+
+    function viewJobDetail(jobId) {
+      const job = cachedJobs.find(j => j.job_id === jobId);
+      if (!job) return;
+      document.getElementById('modalJobId').textContent = `ID de Tarea: ${job.job_id} | Archivo: ${job.filename}`;
+      document.getElementById('modalJsonContent').textContent = JSON.stringify(job, null, 2);
+      document.getElementById('detailModal').classList.remove('hidden');
+    }
+
+    function closeModal() {
+      document.getElementById('detailModal').classList.add('hidden');
+    }
+
+    function refreshData() {
+      fetchMetrics();
+      fetchJobs();
+    }
+
+    // Drag and drop listeners
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('fileInput');
+
+    dropZone.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', (e) => {
+      if (e.target.files.length > 0) uploadFile(e.target.files[0]);
+    });
+
+    dropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropZone.classList.add('border-amber-500');
+    });
+
+    dropZone.addEventListener('dragleave', () => {
+      dropZone.classList.remove('border-amber-500');
+    });
+
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('border-amber-500');
+      if (e.dataTransfer.files.length > 0) {
+        uploadFile(e.dataTransfer.files[0]);
+      }
+    });
+
+    // Initial load and polling
+    refreshData();
+    setInterval(refreshData, 2000);
+  </script>
+</body>
+</html>
