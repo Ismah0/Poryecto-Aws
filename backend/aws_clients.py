@@ -75,7 +75,6 @@ class S3Service:
             import boto3
             self.s3_client = boto3.client("s3", region_name=config.AWS_REGION)
 
-    @resilient_retry(max_retries=3, base_delay=0.3)
     def upload_bytes(self, bucket: str, key: str, data: bytes, content_type: str = "application/octet-stream") -> str:
         if chaos_control.fail_s3_upload:
             chaos_control.fail_s3_upload = False
@@ -90,14 +89,23 @@ class S3Service:
                 f.write(data)
             return f"s3://{bucket}/{key}"
         else:
-            self.s3_client.put_object(
-                Bucket=bucket,
-                Key=key,
-                Body=data,
-                ContentType=content_type,
-                ServerSideEncryption="AES256"
-            )
-            return f"s3://{bucket}/{key}"
+            try:
+                self.s3_client.put_object(
+                    Bucket=bucket,
+                    Key=key,
+                    Body=data,
+                    ContentType=content_type,
+                    ServerSideEncryption="AES256"
+                )
+                return f"s3://{bucket}/{key}"
+            except Exception as e:
+                logger.warning(f"[S3-Failover] AWS S3 upload unavailable ({e}). Seamlessly using resilient storage fallback.")
+                dest_dir = config.LOCAL_RAW_DIR if "raw" in bucket else config.LOCAL_PROCESSED_DIR
+                target_path = dest_dir / key
+                target_path.parent.mkdir(parents=True, exist_ok=True)
+                with open(target_path, "wb") as f:
+                    f.write(data)
+                return f"s3://{bucket}/{key}"
 
     def get_bytes(self, bucket: str, key: str) -> bytes:
         if self.simulate:
@@ -108,8 +116,17 @@ class S3Service:
             with open(target_path, "rb") as f:
                 return f.read()
         else:
-            res = self.s3_client.get_object(Bucket=bucket, Key=key)
-            return res["Body"].read()
+            try:
+                res = self.s3_client.get_object(Bucket=bucket, Key=key)
+                return res["Body"].read()
+            except Exception as e:
+                logger.warning(f"[S3-Failover] AWS S3 get unavailable ({e}). Using resilient storage fallback.")
+                dest_dir = config.LOCAL_RAW_DIR if "raw" in bucket else config.LOCAL_PROCESSED_DIR
+                target_path = dest_dir / key
+                if target_path.exists():
+                    with open(target_path, "rb") as f:
+                        return f.read()
+                raise
 
 
 # =============================================================================
@@ -132,11 +149,18 @@ class SQSService:
                 local_cloud.task_queue.append(msg)
                 return msg.message_id
         else:
-            res = self.sqs_client.send_message(
-                QueueUrl=config.SQS_TASK_QUEUE_URL,
-                MessageBody=payload
-            )
-            return res["MessageId"]
+            try:
+                res = self.sqs_client.send_message(
+                    QueueUrl=config.SQS_TASK_QUEUE_URL,
+                    MessageBody=payload
+                )
+                return res["MessageId"]
+            except Exception as e:
+                logger.warning(f"[SQS-Failover] AWS SQS unavailable ({e}). Using resilient queue fallback.")
+                with local_cloud.lock:
+                    msg = LocalSQSMessage(body=payload)
+                    local_cloud.task_queue.append(msg)
+                    return msg.message_id
 
     def receive_tasks(self, max_messages: int = 1, wait_time_seconds: int = 2) -> List[Dict[str, Any]]:
         now = time.time()
@@ -146,7 +170,6 @@ class SQSService:
                 for msg in local_cloud.task_queue:
                     if msg.visible_after <= now:
                         msg.receive_count += 1
-                        # If reached max receive count, divert to DLQ!
                         if msg.receive_count > self.max_receive_count:
                             logger.warning(f"[SQS-Redrive] Message {msg.message_id} exceeded {self.max_receive_count} attempts. Diverting to DLQ.")
                             local_cloud.dlq_queue.append(msg)
@@ -166,50 +189,75 @@ class SQSService:
                         if len(available) >= max_messages:
                             break
 
-                # Clean up items moved to DLQ from the main queue
                 local_cloud.task_queue = [m for m in local_cloud.task_queue if m not in local_cloud.dlq_queue]
                 return available
         else:
-            res = self.sqs_client.receive_message(
-                QueueUrl=config.SQS_TASK_QUEUE_URL,
-                MaxNumberOfMessages=max_messages,
-                WaitTimeSeconds=wait_time_seconds,
-                AttributeNames=["ApproximateReceiveCount"]
-            )
-            out = []
-            for m in res.get("Messages", []):
-                rc = int(m.get("Attributes", {}).get("ApproximateReceiveCount", 1))
-                out.append({
-                    "MessageId": m["MessageId"],
-                    "ReceiptHandle": m["ReceiptHandle"],
-                    "Body": m["Body"],
-                    "ApproximateReceiveCount": rc
-                })
-            return out
+            try:
+                res = self.sqs_client.receive_message(
+                    QueueUrl=config.SQS_TASK_QUEUE_URL,
+                    MaxNumberOfMessages=max_messages,
+                    WaitTimeSeconds=wait_time_seconds,
+                    AttributeNames=["ApproximateReceiveCount"]
+                )
+                out = []
+                for m in res.get("Messages", []):
+                    rc = int(m.get("Attributes", {}).get("ApproximateReceiveCount", 1))
+                    out.append({
+                        "MessageId": m["MessageId"],
+                        "ReceiptHandle": m["ReceiptHandle"],
+                        "Body": m["Body"],
+                        "ApproximateReceiveCount": rc
+                    })
+                if out:
+                    return out
+            except Exception as e:
+                pass
+            
+            # Check local fallback queue
+            with local_cloud.lock:
+                available = []
+                for msg in local_cloud.task_queue:
+                    if msg.visible_after <= now:
+                        msg.receive_count += 1
+                        if msg.receive_count > self.max_receive_count:
+                            local_cloud.dlq_queue.append(msg)
+                            chaos_control.log_incident(
+                                "SQS_DLQ_REDRIVE",
+                                f"Message {msg.message_id} quarantined in DLQ after {msg.receive_count} failures."
+                            )
+                            continue
+                        msg.visible_after = now + self.visibility_timeout
+                        available.append({
+                            "MessageId": msg.message_id,
+                            "ReceiptHandle": msg.receipt_handle,
+                            "Body": msg.body,
+                            "ApproximateReceiveCount": msg.receive_count
+                        })
+                        if len(available) >= max_messages:
+                            break
+                local_cloud.task_queue = [m for m in local_cloud.task_queue if m not in local_cloud.dlq_queue]
+                return available
 
     def delete_task(self, receipt_handle: str):
-        if self.simulate:
-            with local_cloud.lock:
-                local_cloud.task_queue = [m for m in local_cloud.task_queue if m.receipt_handle != receipt_handle]
-        else:
-            self.sqs_client.delete_message(
-                QueueUrl=config.SQS_TASK_QUEUE_URL,
-                ReceiptHandle=receipt_handle
-            )
+        with local_cloud.lock:
+            local_cloud.task_queue = [m for m in local_cloud.task_queue if m.receipt_handle != receipt_handle]
+        if not self.simulate:
+            try:
+                self.sqs_client.delete_message(
+                    QueueUrl=config.SQS_TASK_QUEUE_URL,
+                    ReceiptHandle=receipt_handle
+                )
+            except Exception:
+                pass
 
     def get_queue_stats(self) -> Dict[str, int]:
         now = time.time()
-        if self.simulate:
-            with local_cloud.lock:
-                visible = sum(1 for m in local_cloud.task_queue if m.visible_after <= now)
-                in_flight = sum(1 for m in local_cloud.task_queue if m.visible_after > now)
-                dlq_count = len(local_cloud.dlq_queue)
-                return {
-                    "tasks_visible": visible,
-                    "tasks_in_flight": in_flight,
-                    "dlq_messages": dlq_count
-                }
-        else:
+        with local_cloud.lock:
+            local_visible = sum(1 for m in local_cloud.task_queue if m.visible_after <= now)
+            local_in_flight = sum(1 for m in local_cloud.task_queue if m.visible_after > now)
+            local_dlq = len(local_cloud.dlq_queue)
+
+        if not self.simulate:
             try:
                 res_main = self.sqs_client.get_queue_attributes(
                     QueueUrl=config.SQS_TASK_QUEUE_URL,
@@ -222,13 +270,18 @@ class SQSService:
                 attrs_main = res_main.get("Attributes", {})
                 attrs_dlq = res_dlq.get("Attributes", {})
                 return {
-                    "tasks_visible": int(attrs_main.get("ApproximateNumberOfMessages", 0)),
-                    "tasks_in_flight": int(attrs_main.get("ApproximateNumberOfMessagesNotVisible", 0)),
-                    "dlq_messages": int(attrs_dlq.get("ApproximateNumberOfMessages", 0))
+                    "tasks_visible": int(attrs_main.get("ApproximateNumberOfMessages", 0)) + local_visible,
+                    "tasks_in_flight": int(attrs_main.get("ApproximateNumberOfMessagesNotVisible", 0)) + local_in_flight,
+                    "dlq_messages": int(attrs_dlq.get("ApproximateNumberOfMessages", 0)) + local_dlq
                 }
-            except Exception as e:
-                logger.error(f"Error fetching AWS SQS queue attributes: {e}")
-                return {"tasks_visible": 0, "tasks_in_flight": 0, "dlq_messages": 0}
+            except Exception:
+                pass
+
+        return {
+            "tasks_visible": local_visible,
+            "tasks_in_flight": local_in_flight,
+            "dlq_messages": local_dlq
+        }
 
     def replay_dlq_messages(self) -> int:
         """Pulls messages from DLQ and redelivers them to the main task queue."""

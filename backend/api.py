@@ -66,11 +66,14 @@ def get_dashboard():
 @app.post("/api/upload")
 async def upload_document(
     file: UploadFile = File(...),
-    custom_name: Optional[str] = Form(None)
+    custom_name: Optional[str] = Form(default=None)
 ):
     try:
         content = await file.read()
-        filename = custom_name or file.filename or "uploaded_doc.txt"
+        filename = file.filename or "uploaded_doc.txt"
+        if isinstance(custom_name, str) and custom_name.strip():
+            filename = custom_name.strip()
+        filename = str(filename)
         file_size = len(content)
         file_hash = hashlib.sha256(content).hexdigest()
         

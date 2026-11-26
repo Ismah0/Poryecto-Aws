@@ -126,9 +126,9 @@ class DocumentWorker:
             line_count = len(text_content.splitlines())
             sha256_hash = hashlib.sha256(raw_bytes).hexdigest()
 
-            # Simulating brief compute time (0.4s)
-            time.sleep(0.4)
-            duration_ms = round((time.time() - start_time) * 1000, 2)
+            # Simulating brief compute time (0.15s)
+            time.sleep(0.15)
+            duration_ms = int(round((time.time() - start_time) * 1000))
 
             analysis_result = {
                 "filename": filename,

@@ -337,9 +337,33 @@
     </div>
   </div>
 
+  <!-- TOAST NOTIFICATION -->
+  <div id="toastNotification" class="fixed bottom-6 right-6 z-50 transform transition-all duration-300 translate-y-20 opacity-0 pointer-events-none flex items-center space-x-3 px-4 py-3 rounded-xl shadow-2xl text-xs font-medium border"></div>
+
   <!-- JAVASCRIPT LOGIC -->
   <script>
     let cachedJobs = [];
+
+    function showToast(message, type = 'info') {
+      const toast = document.getElementById('toastNotification');
+      let bg = 'bg-slate-900 border-slate-700 text-slate-200';
+      let icon = '<i class="fa-solid fa-circle-info text-sky-400 text-sm"></i>';
+
+      if (type === 'success') {
+        bg = 'bg-slate-900 border-emerald-500/50 text-emerald-300';
+        icon = '<i class="fa-solid fa-circle-check text-emerald-400 text-sm"></i>';
+      } else if (type === 'error') {
+        bg = 'bg-slate-900 border-rose-500/50 text-rose-300';
+        icon = '<i class="fa-solid fa-triangle-exclamation text-rose-400 text-sm"></i>';
+      }
+
+      toast.className = `fixed bottom-6 right-6 z-50 transform transition-all duration-300 translate-y-0 opacity-100 flex items-center space-x-3 px-4 py-3 rounded-xl shadow-2xl text-xs font-medium border ${bg}`;
+      toast.innerHTML = `${icon}<span>${message}</span>`;
+
+      setTimeout(() => {
+        toast.className = 'fixed bottom-6 right-6 z-50 transform transition-all duration-300 translate-y-20 opacity-0 pointer-events-none flex items-center space-x-3 px-4 py-3 rounded-xl shadow-2xl text-xs font-medium border';
+      }, 3500);
+    }
 
     async function fetchMetrics() {
       try {
@@ -412,11 +436,11 @@
         } else if (j.status === 'RETRYING_IN_SQS') {
           statusBadge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/30 animate-pulse">RETRYING SQS</span>';
         } else {
-          statusBadge = `<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-700 text-slate-300">${j.status}</span>`;
+          statusBadge = `<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-700 text-slate-300 animate-pulse">${j.status}</span>`;
         }
 
-        const latency = j.result?.metrics?.processing_time_ms ? `${j.result.metrics.processing_time_ms} ms` : (j.error_message ? `<span class="text-rose-400 truncate max-w-xs block" title="${j.error_message}">${j.error_message}</span>` : 'En cola');
-        const shortHash = j.sha256 ? `${j.sha256.substring(0, 10)}...` : 'N/A';
+        const latency = j.result?.metrics?.processing_time_ms ? `${j.result.metrics.processing_time_ms} ms` : (j.error_message ? `<span class="text-rose-400 truncate max-w-xs block" title="${j.error_message}">${j.error_message}</span>` : 'En proceso...');
+        const shortHash = j.sha256 ? `${j.sha256.substring(0, 10)}...` : 'Calculando...';
 
         return `
           <tr class="hover:bg-slate-800/40 transition">
@@ -437,43 +461,95 @@
     }
 
     async function uploadFile(file) {
+      if (!file) return;
+      showToast(`Subiendo "${file.name}" a Amazon S3...`, 'info');
+
+      // Optimistic UI insert: Immediately show row in table so user sees 0-latency reaction
+      const tbody = document.getElementById('jobsTableBody');
+      const optimisticRow = `
+        <tr id="optimisticRow" class="bg-indigo-950/20 border-l-2 border-indigo-500 animate-pulse transition">
+          <td class="py-2.5 px-3 font-semibold text-indigo-300">Generando...</td>
+          <td class="py-2.5 px-3 text-slate-200 font-sans">${file.name}</td>
+          <td class="py-2.5 px-3"><span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-sky-500/20 text-sky-300 border border-sky-500/40">QUEUED</span></td>
+          <td class="py-2.5 px-3 text-slate-400">Calculando SHA...</td>
+          <td class="py-2.5 px-3 text-slate-400">Enviando a SQS</td>
+          <td class="py-2.5 px-3 text-slate-400 text-[11px]">Ahora mismo</td>
+          <td class="py-2.5 px-3 text-right text-slate-500">-</td>
+        </tr>
+      `;
+      if (tbody.innerHTML.includes('No hay trabajos')) {
+        tbody.innerHTML = optimisticRow;
+      } else {
+        tbody.insertAdjacentHTML('afterbegin', optimisticRow);
+      }
+
       const formData = new FormData();
       formData.append('file', file);
+
       try {
         const res = await fetch('/api/upload', { method: 'POST', body: formData });
         const data = await res.json();
+        
+        if (!res.ok) {
+          throw new Error(data.detail || "Error en el servidor al subir archivo");
+        }
+
+        showToast(`¡"${file.name}" procesado con éxito!`, 'success');
+        
+        // Fast reactive polling cycles to capture quick status changes
         refreshData();
+        setTimeout(refreshData, 300);
+        setTimeout(refreshData, 700);
+        setTimeout(refreshData, 1400);
       } catch (err) {
-        alert("Error al subir archivo: " + err);
+        showToast("Error al subir archivo: " + err.message, 'error');
+        refreshData();
       }
     }
 
     async function uploadSampleDocument() {
+      const sampleBtn = event?.currentTarget;
+      if (sampleBtn) {
+        sampleBtn.disabled = true;
+        sampleBtn.innerHTML = '<i class="fa-solid fa-spinner animate-spin"></i><span>Subiendo Documento...</span>';
+      }
+
       const sampleText = `REPORTE DE AUDITORÍA Y RESILIENCIA EMPRESARIAL DOCUSHIELD
 Fecha: ${new Date().toISOString()}
-Entorno: Amazon Web Services Cloud
+Entorno: Amazon Web Services Cloud (us-east-1)
 Módulos: S3 Ingestion, SQS Decoupled Queues, DynamoDB State Store, SNS Alerts.
 Este documento valida el procesamiento asíncrono y la idempotencia en sistemas distribuidos.`;
 
       const blob = new Blob([sampleText], { type: 'text/plain' });
       const file = new File([blob], `documento_auditoria_${Math.floor(Math.random()*1000)}.txt`, { type: 'text/plain' });
-      await uploadFile(file);
+      
+      try {
+        await uploadFile(file);
+      } finally {
+        if (sampleBtn) {
+          sampleBtn.disabled = false;
+          sampleBtn.innerHTML = '<i class="fa-solid fa-file-circle-plus"></i><span>Cargar Documento de Prueba</span>';
+        }
+      }
     }
 
     async function triggerChaos(endpoint, alertTitle) {
       try {
+        showToast(`Armando prueba: ${alertTitle}...`, 'info');
         const res = await fetch(endpoint, { method: 'POST' });
         const data = await res.json();
-        fetchMetrics();
-        fetchJobs();
+        showToast(data.action || alertTitle, 'success');
+        refreshData();
+        setTimeout(refreshData, 500);
       } catch (err) {
-        alert("Error al ejecutar experimento de caos: " + err);
+        showToast("Error en prueba de caos: " + err, 'error');
       }
     }
 
     async function resetSystem() {
       if (confirm("¿Desea reiniciar las métricas y la base de datos de pruebas?")) {
         await fetch('/api/reset', { method: 'POST' });
+        showToast("Datos reiniciados", 'info');
         refreshData();
       }
     }
@@ -521,9 +597,9 @@ Este documento valida el procesamiento asíncrono y la idempotencia en sistemas 
       }
     });
 
-    // Initial load and polling
+    // Initial load and fast polling (every 1 second for ultra-responsive live demo)
     refreshData();
-    setInterval(refreshData, 2000);
+    setInterval(refreshData, 1000);
   </script>
 </body>
 </html>
